@@ -3,7 +3,7 @@ project(oes_ex4)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(oes_ex4 main.cpp
+add_executable(oes_ex4
         MemoryConstants.h
         PhysicalMemory.cpp
         PhysicalMemory.h
