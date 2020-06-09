@@ -9,4 +9,4 @@ add_executable(oes_ex4
         PhysicalMemory.h
         SimpleTest.cpp
         VirtualMemory.cpp
-        VirtualMemory.h)
+        VirtualMemory.h ourTester.cpp)
