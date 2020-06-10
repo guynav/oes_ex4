@@ -39,11 +39,55 @@ void splitVAddress(uint64_t virtualAddress, uint &offset, uint &pageNumber) {
 
 uint64_t getRowIdx(uint64_t pageNumber, int iterNum)
 {
-    int shift2 = BIT64 - OFFSET_WIDTH -  PAGE_SIZE - iterNum * PAGE_SIZE;
+    int shift2 = BIT64 - OFFSET_WIDTH -  log2(PAGE_SIZE) - iterNum * log2(PAGE_SIZE);
     uint64_t mask = pow(log2(PAGE_SIZE), 2) - 1;
     mask  = mask << shift2;
     uint64_t curPageNumber = pageNumber & mask;
     return  curPageNumber >> shift2;
+}
+
+
+uint64_t isEmpty(uint64_t frame)
+{
+    uint64_t idx;
+    word_t val;
+    uint64_t maxVal = 0;
+    for (int i = 0; i < PAGE_SIZE; ++i)
+    {
+        idx = frame * PAGE_SIZE + i;
+        PMread(idx, &val);
+        maxVal =  std::max((uint64_t) val, maxVal);
+    }
+    return maxVal;
+}
+
+/**
+ * This function gets a new frame iof needed, does all the cleaning and searching
+ * @return new frame ready to use
+ */
+uint64_t getNewFrame()
+{
+    uint64_t maxUsedIDX = 0;
+    uint64_t curMax;
+
+    // op 1 empty frame (all entries are 0)
+    for (int i = 0; i < NUM_FRAMES; ++i)
+    {
+        if ((curMax  = isEmpty(i)) == 0)
+        {
+            return i;
+        } else
+        {
+            maxUsedIDX = std::max(maxUsedIDX, curMax);
+        }
+
+    }
+    // op 2 unused frame
+    if (maxUsedIDX < NUM_FRAMES)
+    {
+        return maxUsedIDX + 1;
+    }
+    // op 3 formula
 }
 
 /**
@@ -53,24 +97,29 @@ uint64_t getRowIdx(uint64_t pageNumber, int iterNum)
  */
 uint getPAdreess(uint64_t pageNumber)
 {
+
     //Naive implementation. no edge cases
+    uint64_t cur_add = 0;
+    uint64_t idx;
+    word_t nextAdd;
 
-    int curPage = 0; // todo: check what's the location of the tree's root.
-
-
-
+    for (int i = 0; i < (BIT64 - OFFSET_WIDTH) /  log2(PAGE_SIZE) ; ++i)
+    {
+        idx = getRowIdx(pageNumber, i);
+        idx = cur_add * PAGE_SIZE + idx;
+        PMread(idx, &nextAdd);
+        cur_add = (uint64_t) nextAdd;
+        if (!cur_add)
+        {
+            cur_add = getNewFrame();
+        }
+    }
 
 }
 
 
 
-/**
- * This function gets a new frame iof needed, does all the cleaning and searching
- * @return new frame ready to use
- */
-uint getNewFrame() {
 
-}
 
 int getInPageAddress() {
     if (!PAGE_SIZE) {
