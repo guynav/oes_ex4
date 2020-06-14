@@ -205,9 +205,6 @@ uint64_t getPAdreess(uint64_t pageNumber)
 }
 
 
-
-
-
 int getInPageAddress() {
     if (!PAGE_SIZE) {
         std::cerr << ERROR_MSG << " Page size is zero: " << '\n';
