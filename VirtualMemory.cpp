@@ -153,16 +153,9 @@ uint64_t getNewFrame(uint64_t pageNumber)
 {
     uint64_t maxDistAdd = 0, maxFrame = 0, newFrame;
     word_t nextAdd;
-    for (int i = 0; i < PAGE_SIZE; ++i)
+    if( (newFrame = getNewFrameHelper((uint64_t) nextAdd, 1, maxDistAdd, 0, maxFrame, pageNumber, 0)))
     {
-        PMread(i, &nextAdd);
-        if ((uint64_t) nextAdd)
-        {
-            if( (newFrame = getNewFrameHelper((uint64_t) nextAdd, 1, maxDistAdd, i, maxFrame, pageNumber, 0)))
-            {
-                return newFrame;
-            }
-        }
+        return newFrame;
     }
     // option 2 - if not all frames are used, given the max + 1
     if(maxFrame < NUM_FRAMES - 1)
