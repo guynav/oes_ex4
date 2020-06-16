@@ -149,7 +149,7 @@ uint64_t getNextLevel(uint64_t pageNumber, uint64_t cur_add, int iterNum) {
  * This function gets a new frame if needed, does all the cleaning and searching
  * @return new frame ready to use
  */
-uint64_t getNewFrame(uint64_t pageNumber, uint64_t father) {
+uint64_t getNewFrame(uint64_t pageNumber) {
     uint64_t maxDistAdd = 0, maxFrame = 0, emptyFrame=0;
     getNewFrameHelper(0,1, maxDistAdd, 0, maxFrame,pageNumber, emptyFrame, 0 );
 //    newFrame = getNewFrameHelper(0, 1, maxDistAdd, 0, maxFrame, pageNumber,&emptyFrame,0);
