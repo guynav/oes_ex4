@@ -17,7 +17,9 @@ set(vm_source_files
         )
 
 set(vm_compile_options -Wall -Wextra -g -O2)
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
 
 # ------------ Do not modify anything below these lines ------------- #
 
