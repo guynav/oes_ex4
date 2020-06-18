@@ -348,6 +348,7 @@ const uint64_t RANDOM_TEST_ITERATIONS_COUNT = 10000;
 
 TEST(RandomTests, Random_Addresses_Random_Values)
 {
+
     fullyInitialize(InitializationMethod::RandomizeValues);
     std::unordered_map<uint64_t, word_t> vmToValue;
     std::default_random_engine eng = getRandomEngine();
