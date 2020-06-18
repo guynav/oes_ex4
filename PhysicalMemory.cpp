@@ -67,8 +67,7 @@ void PMwrite(uint64_t physicalAddress, word_t value) {
 
     assert(physicalAddress < RAM_SIZE);
 
-    RAM[physicalAddress / PAGE_SIZE][physicalAddress
-             % PAGE_SIZE] = value;
+    RAM[physicalAddress / PAGE_SIZE][physicalAddress % PAGE_SIZE] = value;
 }
 
 void PMevict(uint64_t frameIndex, uint64_t evictedPageIndex) {

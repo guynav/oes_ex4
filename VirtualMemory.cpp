@@ -9,7 +9,7 @@
 #define BIT64 64
 
 
-uint64_t getPAdreess(uint64_t pageNumber, bool isREAD);
+uint64_t getPAdreess(uint64_t pageNumber, bool isREAD, uint64_t offset);
 
 void checkVMDist(uint64_t &maxDistAdd, uint64_t curVMadd, uint64_t pageNumber);
 
@@ -29,8 +29,8 @@ void clearTable(uint64_t frameIndex)
  */
 void splitVAddress(uint64_t virtualAddress, uint64_t &offset, uint64_t &pageNumber)
 {
-    uint64_t valentina = pow(2, OFFSET_WIDTH ) - 1;
-//    std::cout<<"Mask is " << valentina << " OFFSET width " << OFFSET_WIDTH <<  std::endl;
+    uint64_t valentina = pow(2, OFFSET_WIDTH) - 1;
+//    ////std::cout<<"Mask is " << valentina << " OFFSET width " << OFFSET_WIDTH <<  std::endl;
     offset = virtualAddress & valentina;
     pageNumber = virtualAddress & ~valentina;
     pageNumber = pageNumber >> OFFSET_WIDTH;
@@ -63,7 +63,7 @@ uint64_t getRowIdx(uint64_t pageNumber, int iterNum)
 //    return 0;
 //}
 
-void safelyRemoveFather(uint64_t darthVader, uint64_t luke, bool toEvict = false)
+void safelyRemoveFather(uint64_t darthVader, uint64_t luke, uint64_t pageNumber, bool toEvict = false)
 {
     word_t nextAdd;
     uint64_t idx;
@@ -75,23 +75,30 @@ void safelyRemoveFather(uint64_t darthVader, uint64_t luke, bool toEvict = false
         {
             if (toEvict)
             {
-
-                PMevict(luke, idx);
-                std::cout << "EVICT : from frame " << darthVader << " on index " << idx << std::endl;
-                for (int j = 0; j < PAGE_SIZE; ++j)
-                {
-                    PMwrite(PAGE_SIZE * luke + j, (word_t) 0);
-                }
+                PMevict(luke ,  pageNumber);
+                //std::cout << "EVICT : from frame " << luke << " on index " << i << std::endl;
+//                for (int j = 0; j < PAGE_SIZE; ++j)
+//                {
+//                    //std::cout<< "PAGE_SIZE * luke is " << PAGE_SIZE * luke << " and j is "<< j << std::endl;
+//                }
+//                word_t stam;
+//                PMread(15, &stam);
+//                //std::cout<< "stam is before : "<< stam<<std::endl;
+//                PMwrite(PAGE_SIZE * luke + offset, (word_t) 0);
+//                //std::cout<< "PMWrite Zero to : "<< PAGE_SIZE * luke + offset<<std::endl;
+//                PMread(15, &stam);
+//                //std::cout<< "stam is after : "<< stam<<std::endl;
             }
-            PMwrite(PAGE_SIZE * darthVader + idx, (word_t) 0);
+            PMwrite(PAGE_SIZE * darthVader + i, (word_t) 0);
             break;
         }
     }
 
 }
+
 // DFS on the tree
 void getNewFrameHelper(uint64_t curFrame, uint64_t depth, uint64_t &maxDistAdd, uint64_t curVMadd,
-                       uint64_t &maxFrame, uint64_t pageNumber, uint64_t &emptyFrame, uint64_t father)
+                       uint64_t &maxFrame, uint64_t pageNumber, uint64_t &emptyFrame, uint64_t father, uint64_t prevFrame, uint64_t offset)
 {
 
     maxFrame = curFrame > maxFrame ? curFrame : maxFrame;
@@ -113,16 +120,18 @@ void getNewFrameHelper(uint64_t curFrame, uint64_t depth, uint64_t &maxDistAdd, 
             uint64_t nextVMadd = curVMadd << (int) log2(PAGE_SIZE);
             nextVMadd += i;
             getNewFrameHelper((uint64_t) nextAdd, depth + 1,
-                              maxDistAdd, nextVMadd, maxFrame, pageNumber, emptyFrame, father);
+                              maxDistAdd, nextVMadd, maxFrame, pageNumber, emptyFrame, father, curFrame, offset);
             if (emptyFrame)
             {
                 return;
             }
         }
     }
-    if (empty)
+    if (empty &&  curFrame != father)
     {
-        emptyFrame = curFrame == father ? emptyFrame : curFrame;
+        emptyFrame =  curFrame;
+        safelyRemoveFather(prevFrame, curFrame, pageNumber);
+
     }
 
 //    safelyRemoveFather(father, curFrame);
@@ -138,32 +147,34 @@ void getNewFrameHelper(uint64_t curFrame, uint64_t depth, uint64_t &maxDistAdd, 
  */
 void checkVMDist(uint64_t &maxDistAdd, uint64_t curVMadd, uint64_t pageNumber)
 {
-    if (curVMadd) //todo check if the if and else is needed
-    {
-        int cur_calc = abs((int) (pageNumber - maxDistAdd));
-        uint64_t cur = std::min(cur_calc, (int) (VIRTUAL_MEMORY_SIZE - (pageNumber - cur_calc)));
-        int checked_calc = abs((int) (pageNumber - curVMadd));
-        uint64_t checked = std::min(checked_calc, (int) (VIRTUAL_MEMORY_SIZE - (pageNumber - checked_calc)));
-        maxDistAdd =  cur < checked ? curVMadd : maxDistAdd;
-    }
-    else
-    {
-        maxDistAdd = curVMadd;
-    }
+
+    ////std::cout << "NUM_PAGES is " << NUM_PAGES << std::endl;
+    int curCalc = abs((int) (pageNumber - maxDistAdd));
+    int curCalc2 = (int) (NUM_PAGES - (pageNumber - maxDistAdd));
+    uint64_t cur = std::min(curCalc, curCalc2);
+    int checkedCalc = abs((int) (pageNumber - curVMadd));
+    int checkedCalc2 = (int) (NUM_PAGES - (pageNumber - curVMadd));
+    uint64_t checked = std::min(checkedCalc, checkedCalc2);
+    maxDistAdd = cur < checked ? curVMadd : maxDistAdd;
+
 }
 
 
-void safelyRemoveFrame(uint64_t pageNumber, uint64_t targetFrame)
+void safelyRemoveFrame(uint64_t pageNumber, uint64_t targetFrame, uint64_t offset)
 {
     //Naive implementation. no edge cases
-    uint64_t cur_add = 0;
+    uint64_t curAddidx ;
+    word_t curFrame = 0;
 
-
-    for (int i = 0; i < TABLES_DEPTH  - 1; ++i)
+    for (int i = 0; i < TABLES_DEPTH - 1; ++i)
     {
-        cur_add = getNextLevel(pageNumber, cur_add, i);
+        curAddidx = getNextLevel(pageNumber, curAddidx, i);
+        PMread(PAGE_SIZE* (uint64_t) curFrame + curAddidx, &curFrame);
+
     }
-    safelyRemoveFather(cur_add, targetFrame, true);
+
+    safelyRemoveFather((uint64_t) curFrame, targetFrame, pageNumber, true);
+
 }
 
 /**
@@ -177,23 +188,24 @@ uint64_t getNextLevel(uint64_t pageNumber, uint64_t cur_add, int iterNum)
 {
     ///////
     int windowSize = VIRTUAL_ADDRESS_WIDTH / TABLES_DEPTH;
-    std::cout<<"WindowSize is " << OFFSET_WIDTH << std::endl;
-    std::cout<<"Page number is " << pageNumber <<" iteration number is " << iterNum << std::endl;
-    std::cout<<"VIRTUAL_ADDRESS_WIDTH is " << VIRTUAL_ADDRESS_WIDTH << " TABLES_DEPTH is " << TABLES_DEPTH <<std::endl;
-    int shift2 = VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH -  (OFFSET_WIDTH) * (iterNum  + 1); //BIT64 - OFFSET_WIDTH - log2(PAGE_SIZE) - iterNum * log2(PAGE_SIZE);SHIFT SHOULD BE ZERO
-    std::cout<<"shift size is  " << shift2 << std::endl;
+    ////std::cout << "WindowSize is " << OFFSET_WIDTH << std::endl;
+    ////std::cout << "Page number is " << pageNumber << " iteration number is " << iterNum << std::endl;
+    ////std::cout << "VIRTUAL_ADDRESS_WIDTH is " << VIRTUAL_ADDRESS_WIDTH << " TABLES_DEPTH is " << TABLES_DEPTH << std::endl;
+    int shift2 = VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH - (OFFSET_WIDTH) * (iterNum +
+                                                                          1); //BIT64 - OFFSET_WIDTH - log2(PAGE_SIZE) - iterNum * log2(PAGE_SIZE);SHIFT SHOULD BE ZERO
+    ////std::cout << "shift size is  " << shift2 << std::endl;
     ///BIT64 -  (BIT64 - OFFSET_SIZE) /DEPTH - ((BIT64 - OFFSET_SIZE) /DEPTH )*iterNum;
     uint64_t valentina = PAGE_SIZE - 1; //not giving the right number
-    std::cout<<"mask  is " << valentina << std::endl;
+    ////std::cout << "mask  is " << valentina << std::endl;
     valentina = valentina << shift2;
     uint64_t curPageNumber = pageNumber & valentina;
     //return
     ///////
     uint64_t idx = curPageNumber >> shift2; //getRowIdx(pageNumber, iterNum);
-    std::cout<<"idx  is " << idx << std::endl;
+    ////std::cout << "idx  is " << idx << std::endl;
 //    idx = cur_add * PAGE_SIZE + idx; //todo delete!
-    std::cout<<"PA address  is " << cur_add * PAGE_SIZE + idx << std::endl;
-//    std::cout << nextAdd << std::endl; //todo delete
+    ////std::cout << "PA address  is " << cur_add * PAGE_SIZE + idx << std::endl;
+//    ////std::cout << nextAdd << std::endl; //todo delete
     return idx;
 }
 
@@ -202,29 +214,31 @@ uint64_t getNextLevel(uint64_t pageNumber, uint64_t cur_add, int iterNum)
  * This function gets a new frame if needed, does all the cleaning and searching
  * @return new frame ready to use
  */
-uint64_t getNewFrame(uint64_t pageNumber, uint64_t curFrame)
+uint64_t getNewFrame(uint64_t pageNumber, uint64_t curFrame, uint64_t offset)
 {
     uint64_t maxDistAdd = pageNumber, maxFrame = 0, emptyFrame = 0;
 
     // generate a frame to use
-    getNewFrameHelper(0, 0, maxDistAdd, 0, maxFrame, pageNumber, emptyFrame, curFrame);
+    getNewFrameHelper(0, 0, maxDistAdd, 0, maxFrame, pageNumber, emptyFrame, curFrame, 0, offset);
 //    newFrame = getNewFrameHelper(0, 1, maxDistAdd, 0, maxFrame, pageNumber,&emptyFrame,0);
     // option 1- find empty frame
     if (emptyFrame)
     {
-//        std::cout << "Option 1: returns newFrame : " << emptyFrame << std::endl;
+//        ////std::cout << "Option 1: returns newFrame : " << emptyFrame << std::endl;
         return emptyFrame;
     }
     // option 2 - if not all frames are used, given the max + 1
     if (maxFrame < NUM_FRAMES - 1)
     {
-//        std::cout << "Option 2: returns newFrame : " << maxFrame + 1 << std::endl;
+//        ////std::cout << "Option 2: returns newFrame : " << maxFrame + 1 << std::endl;
         return maxFrame + 1;
     }
     // option 3  -
-    emptyFrame = getPAdreess(maxDistAdd, false);
-//    std::cout << "Option 3: returns newFrame : " << emptyFrame << std::endl;
-    safelyRemoveFrame(maxDistAdd, emptyFrame);
+    emptyFrame = getPAdreess(maxDistAdd, false, offset);
+//    ////std::cout << "Option 3: returns newFrame : " << emptyFrame << std::endl;
+
+    safelyRemoveFrame(maxDistAdd, emptyFrame, offset);
+
     return emptyFrame;
 
 }
@@ -234,36 +248,45 @@ uint64_t getNewFrame(uint64_t pageNumber, uint64_t curFrame)
  * @param pageNumber the part of the uint64_t that  need to get the address
  * @return the physical memory address
  */
-uint64_t getPAdreess(uint64_t pageNumber, bool isREAD)
+uint64_t getPAdreess(uint64_t pageNumber, bool isREAD, uint64_t offset)
 {
 
-    std::cout << " TABLE DEPTH is :" << TABLES_DEPTH << std::endl;
+    ////std::cout << " TABLE DEPTH is :" << TABLES_DEPTH << std::endl;
     uint64_t curAdd = 0, nextAddIdx;
     word_t nextAdd;
     for (int i = 0; i < TABLES_DEPTH; ++i)
     {
         nextAddIdx = getNextLevel(pageNumber, curAdd, i);
         PMread(PAGE_SIZE * curAdd + nextAddIdx, &nextAdd);
-        //std::cout << i << " index add is " << nextAddIdx << " and the Value in the index is " << (uint64_t) nextAdd
+        //////std::cout << i << " index add is " << nextAddIdx << " and the Value in the index is " << (uint64_t) nextAdd
 //                  << " (if 0 need new frame) " << std::endl; //todo delete
 
-        if (!(uint64_t) nextAdd)
+        if (!(uint64_t) netAdd)
         {
-            uint64_t newFrame = getNewFrame(pageNumber, curAdd);
-//            std::cout << "next add after getNewFrame: " << newFrame << std::endl; //todo delete
+            uint64_t newFrame = getNewFrame(pageNumber, curAdd,offset);
+            if(!newFrame)
+                {
+                std::cout << "OOPS WE ARE FUCKED! NEW FRAME IS -  " << newFrame << std::endl;
+                }
+//            ////std::cout << "next add after getNewFrame: " << newFrame << std::endl; //todo delete
             uint64_t idx = curAdd * PAGE_SIZE + nextAddIdx;
-            std::cout << "PAGE UPDATE: writes  " << newFrame << " on page " << curAdd << " in line " << nextAddIdx << " which translates into index " << idx << std::endl;
+            //std::cout << "PAGE UPDATE: writes  " << newFrame << " on page " << curAdd << " in line " << nextAddIdx << " which translates into index " << idx << std::endl;
             PMwrite(PAGE_SIZE * curAdd + nextAddIdx, newFrame);
-            pprint();
+            ////pprint();
+
             bool isLeaf = i == TABLES_DEPTH - 1;
             if (isLeaf)
             {
-//                std::cout << "BEFORE restore:  " << std::endl;
-//                pprint();
+                //std::cout << "BEFORE restore:  " << std::endl;
+//                //pprint();
                 PMrestore(newFrame, pageNumber);
-//                std::cout << "AFTER restore:  " << std::endl;
-//                pprint();
-                std::cout << "RESTORE : from frame  " << newFrame << " on index " << idx << std::endl;
+
+//                ////std::cout << "AFTER restore:  " << std::endl;
+//                //pprint();
+                ////std::cout << "RESTORE : from frame  " << newFrame << " on index " << pageNumber << std::endl;
+            }
+            else{
+                clearTable(newFrame);
             }
 
             nextAdd = newFrame;
@@ -292,10 +315,12 @@ int VMread(uint64_t virtualAddress, word_t * value)
     }
     uint64_t pageNumber, offSet;
     splitVAddress(virtualAddress, offSet, pageNumber);
-    std::cout << "READING: virtual address: " << virtualAddress << " offset: " << offSet << " pageNumber: " << pageNumber << std::endl;
-    uint64_t PA = getPAdreess(pageNumber, true);
+    //std::cout << "READING: virtual address: " << virtualAddress << " offset: " << offSet << " pageNumber: "<< pageNumber << std::endl;
+
+    uint64_t PA = getPAdreess(pageNumber, true, offSet);
     PMread(PA * PAGE_SIZE + offSet, value);
-    std::cout << "reads value " << *value << " from physical Address - " << PA*PAGE_SIZE + offSet << std::endl;
+    //std::cout << "reads value " << *value << " from physical Address - " << PA * PAGE_SIZE + offSet << std::endl;
+    //pprint();
     return 1;
 }
 
@@ -309,10 +334,10 @@ int VMwrite(uint64_t virtualAddress, word_t value)
     }
     uint64_t pageNumber, offSet;
     splitVAddress(virtualAddress, offSet, pageNumber);
-    std::cout << "WIRTING: virtual address: " << virtualAddress << " offset: " << offSet << " pageNumber: "<< pageNumber<< std::endl;
-    uint64_t PA = getPAdreess(pageNumber, false);
-    std::cout << "writes the value " << (uint64_t) value << " to physical Address - " << PA * PAGE_SIZE + offSet << std::endl;
+    //std::cout << "WIRTING: virtual address: " << virtualAddress << " offset: " << offSet << " pageNumber: "<< pageNumber << std::endl;
+    uint64_t PA = getPAdreess(pageNumber, false, offSet);
+    //std::cout << "writes the value " << (uint64_t) value << " to physical Address - " << PA * PAGE_SIZE + offSet<< std::endl;
     PMwrite(PA * PAGE_SIZE + offSet, value);
-
+    //pprint();
     return 1;
 }
