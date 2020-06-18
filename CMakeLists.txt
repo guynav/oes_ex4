@@ -21,7 +21,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
 
-# ------------ Do not modify anything below these lines ------------- #
+# ------------ Do not modify anythincdg below these lines ------------- #
 
 set(vm_link_libraries)
 
