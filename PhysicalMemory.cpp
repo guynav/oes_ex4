@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <cstdio>
+#include <iostream>
 
 
 #ifdef INC_TESTING_CODE
@@ -17,6 +18,9 @@ typedef std::vector<word_t> page_t;
 
 std::vector<page_t> RAM;
 std::unordered_map<uint64_t, page_t> swapFile;
+
+
+
 
 void initialize() {
     RAM.resize(NUM_FRAMES, page_t(PAGE_SIZE));
@@ -36,8 +40,25 @@ void PMread(uint64_t physicalAddress, word_t* value) {
 #endif
  }
 
+void  pprint()
+{
+    for (int i = 0; i < RAM.size(); ++i)
+    {
+        std::cout <<  "page no - " << i << std::endl;
+        for (int j : RAM.at(i))
+        {
+            std::cout << j << ' ';
+        }
+        if(RAM.at(i).size())
+        {
+        std::cout << std::endl;
+        }
+    }
+}
+
 void PMwrite(uint64_t physicalAddress, word_t value) {
-#ifdef INC_TESTING_CODE
+
+              #ifdef INC_TESTING_CODE
     Trace::stream() << "PMwrite(" << physicalAddress << ", " << value << ")" << std::endl;
 #endif
 

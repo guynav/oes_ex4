@@ -40,7 +40,7 @@ void PMread(uint64_t physicalAddress, word_t* value);
  */
 void PMwrite(uint64_t physicalAddress, word_t value);
 
-
+void pprint();
 /*
  * evicts a page from the RAM to the hard drive
  */
