@@ -189,6 +189,8 @@ struct ReadWriteTestFixture : public ::testing::TestWithParam<Params>
  */
 TEST_P(ReadWriteTestFixture, Deterministic_Addresses_Random_Values)
 {
+    std::cout << TABLES_DEPTH << " is the TABLE DEPTH " <<OFFSET_WIDTH << " is the OFFSET_WIDTH " <<VIRTUAL_ADDRESS_WIDTH << " is the VIRTUAL_ADDRESS_WIDTH" << std::endl;
+    std::cout << RAM_SIZE << " is the RAM_SIZE "  << PAGE_SIZE  <<" is the PAGE_SIZE "  << std::endl;
     const char* testName;
     uint64_t from;
     uint64_t to;
@@ -226,9 +228,11 @@ TEST_P(ReadWriteTestFixture, Deterministic_Addresses_Random_Values)
 
     for (uint64_t i = from; i < to; i += increment) {
         word_t value;
+        pprint();
         ASSERT_EQ(VMread(i, &value), 1) << "read should succeed";
 //        std::cout << "Read " << value << " from address " << i << std::endl;
         ASSERT_EQ(value, ixToVal.at(i)) << "wrong value was read";
+        pprint();
     }
 }
 
