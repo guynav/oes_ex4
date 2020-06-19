@@ -7,6 +7,8 @@
 #define OFF_SET_SIZE log2(PAGE_SIZE)
 #define ERROR_MSG  "system error:"
 #define BIT64 64
+#define GET_PA(fatherFrame, offSet) PAGE_SIZE * fatherFrame + offSet
+
 
 
 uint64_t getPAdreess(uint64_t pageNumber, uint64_t offset);
@@ -14,6 +16,8 @@ uint64_t getPAdreess(uint64_t pageNumber, uint64_t offset);
 void checkVMDist(uint64_t &maxDistAdd, uint64_t curVMadd, uint64_t pageNumber);
 
 uint64_t getNextLevel(uint64_t pageNumber, int iterNum);
+
+uint64_t getPAdreess2(uint64_t pageNumber);
 
 void clearTable(uint64_t frameIndex)
 {
@@ -29,8 +33,8 @@ void clearTable(uint64_t frameIndex)
  */
 void splitVAddress(uint64_t virtualAddress, uint64_t &offset, uint64_t &pageNumber)
 {
-    uint64_t valentina = pow(2, OFFSET_WIDTH) - 1;
 //    ////std::cout<<"Mask is " << valentina << " OFFSET width " << OFFSET_WIDTH <<  std::endl;
+    uint64_t valentina = pow(2, OFFSET_WIDTH) - 1;
     offset = (virtualAddress & valentina);
     pageNumber = virtualAddress & ~valentina;
     pageNumber = pageNumber >> OFFSET_WIDTH;
@@ -72,7 +76,7 @@ void safelyRemoveFather(uint64_t darthVader, uint64_t luke, uint64_t pageNumber,
 //                PMread(15, &stam);
 //                //std::cout<< "stam is after : "<< stam<<std::endl;
             }
-            PMwrite(PAGE_SIZE * darthVader + i, (word_t) 0);
+            PMwrite(GET_PA(darthVader, i), (word_t) 0);
             break;
         }
     }
@@ -139,7 +143,6 @@ void checkVMDist(uint64_t &maxDistAdd, uint64_t curVMadd, uint64_t pageNumber)
     int checkedCalc2 = (int) (NUM_PAGES - (pageNumber - curVMadd));
     uint64_t checked = std::min(checkedCalc, checkedCalc2);
     maxDistAdd = cur < checked ? curVMadd : maxDistAdd;
-
 }
 
 
@@ -203,28 +206,29 @@ uint64_t getNewFrame(uint64_t pageNumber, uint64_t curFrame, uint64_t offset)
 
     // generate a frame to use
     getNewFrameHelper(0, 0, maxDistAdd, 0, maxFrame, pageNumber, emptyFrame, curFrame, 0, offset);
-//    newFrame = getNewFrameHelper(0, 1, maxDistAdd, 0, maxFrame, pageNumber,&emptyFrame,0);
+
 //     option 1- find empty frame
     if (emptyFrame)
     {
         std::cout << "Option 1: returns newFrame : " << emptyFrame << std::endl;
-        return emptyFrame;
     }
 //     option 2 - if not all frames are used, given the max + 1
-    if (maxFrame < NUM_FRAMES - 1)
+    else if (maxFrame < NUM_FRAMES - 1)
     {
         std::cout << "Option 2: returns newFrame : " << maxFrame + 1 << std::endl;
-        return maxFrame + 1;
+        emptyFrame =  maxFrame + 1;
     }
-    // option 3  -
-    emptyFrame = getPAdreess(maxDistAdd, offset);
-    std::cout << "Option 3: returns newFrame : " << emptyFrame << std::endl;
-
-    safelyRemoveFrame(maxDistAdd, emptyFrame, offset);
-
+        // option 3  -
+    else {
+        std::cout << "Option 3: returns newFrame : " << emptyFrame << std::endl;
+        emptyFrame = getPAdreess(maxDistAdd,offset);
+        safelyRemoveFrame(maxDistAdd, emptyFrame, offset);
+        clearTable(emptyFrame);
+    }
     return emptyFrame;
 
 }
+
 
 /**
  * Get the physical address by given a Virtual address
@@ -248,9 +252,9 @@ uint64_t getPAdreess(uint64_t pageNumber, uint64_t offset)
         {
             uint64_t newFrame = getNewFrame(pageNumber, curAdd,offset);
             if(!newFrame)
-                {
+            {
                 std::cout << "OOPS WE ARE FUCKED! NEW FRAME IS -  " << newFrame << std::endl;
-                }
+            }
 //            ////std::cout << "next add after getNewFrame: " << newFrame << std::endl; //todo delete
 //            uint64_t idx = curAdd * PAGE_SIZE + nextAddIdx;
             //std::cout << "PAGE UPDATE: writes  " << newFrame << " on page " << curAdd << " in line " << nextAddIdx << " which translates into index " << idx << std::endl;
@@ -268,15 +272,158 @@ uint64_t getPAdreess(uint64_t pageNumber, uint64_t offset)
 //                //pprint();
                 ////std::cout << "RESTORE : from frame  " << newFrame << " on index " << pageNumber << std::endl;
             }
-            else{
-                clearTable(newFrame);
-            }
-
             nextAdd = newFrame;
         }
         curAdd = (uint64_t) nextAdd;
     }
     return curAdd;
+}
+
+
+
+void safelyRemoveFather2(uint64_t darthVader, uint64_t luke, uint64_t lukeIdx, bool toEvict = false)
+{
+    if (toEvict)
+    {
+        PMevict(luke , lukeIdx);
+    }
+    PMwrite(GET_PA(darthVader, lukeIdx), (word_t) 0);
+}
+
+
+void safelyRemoveFrame2(uint64_t pageNumber, uint64_t targetFrame)
+{
+    //Naive implementation. no edge cases
+    uint64_t curAddidx ;
+    word_t curFrame = 0;
+
+    for (int i = 0; i < TABLES_DEPTH ; ++i)
+    {
+        curAddidx = getNextLevel(pageNumber, i);
+        if(i < TABLES_DEPTH - 1) {
+            PMread(GET_PA(curFrame, curAddidx), &curFrame);
+        }
+    }
+
+    safelyRemoveFather2((uint64_t) curFrame, targetFrame, curAddidx, true);
+
+}
+
+void getNewFrameHelper2(uint64_t curFrame, uint64_t depth, uint64_t &maxDistAdd, uint64_t curVMadd,
+                       uint64_t &maxFrame, uint64_t pageNumber, uint64_t &emptyFrame, uint64_t father, uint64_t prevFrame)
+{
+
+    maxFrame = curFrame > maxFrame ? curFrame : maxFrame;
+    if (depth == TABLES_DEPTH)
+    {
+        checkVMDist(maxDistAdd, curVMadd, pageNumber);
+        return;
+    }
+    word_t nextAdd;
+    uint64_t idx;
+    bool empty = true;
+    for (int i = 0; i < PAGE_SIZE; ++i)
+    {
+        if (emptyFrame){return;} //If an empty frame was found then no need for whole DFS
+        PMread(GET_PA(curFrame, i), &nextAdd);
+//        std::cout << "DFS on Frame: " << curFrame << ". On index " << i << " Which is " << nextAdd << "( 0 Means need a new frame)"  <<std::endl;
+        if ((uint64_t) nextAdd)
+        {
+            empty = false;
+            uint64_t nextVMadd = (curVMadd << (int) log2(PAGE_SIZE)) + i;
+            getNewFrameHelper2((uint64_t) nextAdd, depth + 1,
+                              maxDistAdd, nextVMadd, maxFrame, pageNumber, emptyFrame, father, curFrame);
+        }
+    }
+    if (empty &&  curFrame != father)
+    {
+        emptyFrame =  curFrame;
+    }
+
+//    safelyRemoveFather(father, curFrame);
+//    return curFrame;
+
+}
+
+uint64_t getNextLevel2(uint64_t pageNumber, int iterNum)
+{
+
+    uint64_t shift, valentina, offset;
+    shift =   OFFSET_WIDTH * (TABLES_DEPTH - iterNum);
+//    std::cout << "Shift is : " << shift << std::endl;
+    valentina =(uint64_t) std::min(VIRTUAL_ADDRESS_WIDTH - (int) shift, OFFSET_WIDTH);
+    offset = (pageNumber >> shift) & (uint64_t) (pow(2, valentina) -1);
+    return offset % PAGE_SIZE;
+}
+
+
+
+
+uint64_t getNewFrame2(uint64_t pageNumber, uint64_t curFrame)
+{
+
+    uint64_t maxDistAdd = pageNumber, maxFrame = 0, emptyFrame = 0;
+    // generate a frame to use
+    getNewFrameHelper2(0, 0, maxDistAdd, 0, maxFrame, pageNumber, emptyFrame, curFrame,
+                       0);
+//    newFrame = getNewFrameHelper(0, 1, maxDistAdd, 0, maxFrame, pageNumber,&emptyFrame,0);
+//     option 1- find empty frame
+    if (emptyFrame)
+    {
+//        std::cout << "Option 1: returns newFrame : " << emptyFrame << std::endl;
+    }
+//     option 2 - if not all frames are used, given the max + 1
+    else if (maxFrame < NUM_FRAMES - 1)
+    {
+//        std::cout << "Option 2: returns newFrame : " << maxFrame + 1 << std::endl;
+        emptyFrame =  maxFrame + 1;
+    }
+        // option 3  -
+    else {
+//        std::cout << "Option 3: returns newFrame : " << emptyFrame << std::endl;
+        emptyFrame = getPAdreess2(maxDistAdd);
+        safelyRemoveFrame2(maxDistAdd, emptyFrame);
+        clearTable(emptyFrame);
+    }
+    return emptyFrame;
+
+}
+
+uint64_t getPAdreess2(uint64_t virtualAddress)
+{
+
+    ////std::cout << " TABLE DEPTH is :" << TABLES_DEPTH << std::endl;
+    uint64_t curAdd = 0, offSet;
+    word_t nextAdd;
+    for (int i = 0; i < TABLES_DEPTH; ++i)
+    {
+        offSet = getNextLevel2(virtualAddress, i); // This is the offset of the current tree level
+        std::cout<< "Current offSet  of VA " << virtualAddress << "in iteration" << i << " is "  << offSet << std::endl;
+        std::cout << "Physical Address trying reading from is " << GET_PA(curAdd, offSet) << std::endl; //todo delete
+        PMread(GET_PA(curAdd, offSet), &nextAdd);
+        if (!(uint64_t) nextAdd)
+        {
+            uint64_t pageNumber = virtualAddress >> OFFSET_WIDTH;
+            uint64_t newFrame = getNewFrame2(pageNumber, curAdd);
+            if(!newFrame){std::cout << "OOPS WE ARE FUCKED! NEW FRAME IS -  " << newFrame << std::endl;}
+//            ////std::cout << "next add after getNewFrame: " << newFrame << std::endl; //todo delete
+//            uint64_t idx = curAdd * PAGE_SIZE + offSet;
+            //std::cout << "PAGE UPDATE: writes  " << newFrame << " on page " << curAdd << " in line " << offSet << " which translates into index " << idx << std::endl;
+            PMwrite(PAGE_SIZE * curAdd + offSet, newFrame);
+            ////pprint();
+
+            bool isLeaf = i == TABLES_DEPTH - 1;
+            if (isLeaf)
+            {
+                PMrestore(newFrame, pageNumber);
+            }
+            nextAdd = newFrame;
+        }
+        curAdd = (uint64_t) nextAdd;
+    }
+    offSet = getNextLevel2(virtualAddress, TABLES_DEPTH);
+    std::cout<< "Last offSet  of VA " << virtualAddress << " is "  << offSet << std::endl;
+    return GET_PA(curAdd, offSet);
 }
 
 void VMinitialize()
@@ -296,13 +443,10 @@ int VMread(uint64_t virtualAddress, word_t * value)
         std::cerr << ERROR_MSG << " illegal virtual address" << std::endl;
         return 0;
     }
-    uint64_t pageNumber, offSet;
-    splitVAddress(virtualAddress, offSet, pageNumber);
-    std::cout << "READING: virtual address: " << virtualAddress << " offset: " << offSet << " pageNumber: "<< pageNumber << std::endl;
-
-    uint64_t PA = getPAdreess(pageNumber, offSet);
-    PMread(PA * PAGE_SIZE + offSet, value);
-    std::cout << "reads value " << *value << " from physical Address - " << PA * PAGE_SIZE + offSet << std::endl;
+    std::cout << "READING: From virtual address: " << virtualAddress <<  std::endl;
+    uint64_t PA = getPAdreess2(virtualAddress);
+    PMread(PA , value);
+    std::cout << "READ value " << *value << " from physical Address - " << PA  << std::endl;
     //pprint();
     return 1;
 }
@@ -315,12 +459,11 @@ int VMwrite(uint64_t virtualAddress, word_t value)
         std::cerr << ERROR_MSG << " illegal virtual address" << std::endl;
         return 0;
     }
-    uint64_t pageNumber, offSet;
-    splitVAddress(virtualAddress, offSet, pageNumber);
-    std::cout << "WIRTING: virtual address: " << virtualAddress << " offset: " << offSet << " pageNumber: "<< pageNumber << std::endl;
-    uint64_t PA = getPAdreess(pageNumber, offSet);
-    std::cout << "writes the value " << (uint64_t) value << " to physical Address - " << PA * PAGE_SIZE + offSet<< std::endl;
-    PMwrite(PA * PAGE_SIZE + offSet, value);
+//    splitVAddress(virtualAddress, offSet, pageNumber);
+    std::cout << "WIRTING: on virtual address: " << virtualAddress << "  The value :" << value <<  std::endl;
+    uint64_t PA = getPAdreess2(virtualAddress);
+    std::cout << "WRITE the value " << (uint64_t) value << " to physical Address - " << PA << std::endl;
+    PMwrite(PA , value);
     //pprint();
     return 1;
 }

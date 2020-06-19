@@ -228,11 +228,11 @@ TEST_P(ReadWriteTestFixture, Deterministic_Addresses_Random_Values)
 
     for (uint64_t i = from; i < to; i += increment) {
         word_t value;
-        pprint();
+//        pprint();
         ASSERT_EQ(VMread(i, &value), 1) << "read should succeed";
 //        std::cout << "Read " << value << " from address " << i << std::endl;
         ASSERT_EQ(value, ixToVal.at(i)) << "wrong value was read";
-        pprint();
+//        pprint();
     }
 }
 
