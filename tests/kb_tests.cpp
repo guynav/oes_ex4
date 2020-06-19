@@ -219,6 +219,7 @@ TEST_P(ReadWriteTestFixture, Deterministic_Addresses_Random_Values)
         word_t genValue = dist(eng);
         ixToVal[i] = genValue;
 //        std::cout << "Writing " << genValue << " to address " << i << std::endl;
+//        pprint();
         ASSERT_EQ(VMwrite(i, genValue), 1) << "write should succeed";
 
         word_t value;
