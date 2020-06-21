@@ -162,14 +162,12 @@ uint64_t getNewFrame(uint64_t pageNumber, uint64_t curFrame)
     if (maxFrame < NUM_FRAMES - 1 && !emptyFrame)
     {
         emptyFrame =  maxFrame + 1;
-        clearTable(emptyFrame);
     }
     // option 3  - find new frame with max cyclical distance
     else if(!emptyFrame)
     {
         emptyFrame = maxDistFrame;
         safelyRemoveFather(fatheRefrence, emptyFrame, maxDistAdd, true);
-        clearTable(emptyFrame);
     } else{
         PMwrite(GET_PA(fatheRefrence, maxDistFrame),0);
     }
@@ -195,13 +193,17 @@ uint64_t getPAddress(uint64_t virtualAddress)
         {
             uint64_t pageNumber = virtualAddress >> OFFSET_WIDTH;
              uint64_t newFrame = getNewFrame(pageNumber, curAdd);
-            PMwrite(PAGE_SIZE * curAdd + offSet, newFrame);
+            PMwrite(PAGE_SIZE * curAdd + offSet, newFrame);//connect son to father
 
 
             bool isLeaf = i == TABLES_DEPTH - 1;
             if (isLeaf)
             {
                 PMrestore(newFrame, pageNumber);
+            }
+            else
+            {
+                clearTable(newFrame);
             }
             nextAdd = newFrame;
         }
